@@ -280,6 +280,8 @@ SOCIAL_ENGINE_URLS = [
     os.getenv("DIGISTORE_URL", "https://digistore24-automation-production.up.railway.app"),
     os.getenv("CREATORAI_URL", "https://creatorai-ultra-production.up.railway.app"),
     os.getenv("COGNITIVE_URL", "https://cognitive-symphony-production.up.railway.app"),
+    os.getenv("SUPERMEGABOT_URL", "https://dudirudibot-mega-production.up.railway.app"),
+    os.getenv("TELEGRAM_BOT_URL", "https://telegram-automation-bot-production.up.railway.app"),
 ]
 
 
