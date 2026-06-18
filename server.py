@@ -273,6 +273,13 @@ SOCIAL_ENGINE_URLS = [
     os.getenv("VISUAL_ENGINE_URL", "https://visual-content-engine-production.up.railway.app"),
     os.getenv("SOCIAL_ENGINE_URL", "https://social-traffic-engine-production.up.railway.app"),
     os.getenv("FREELANCE_ENGINE_URL", "https://freelance-gig-engine-production.up.railway.app"),
+    os.getenv("ADPOSTER_ENGINE_URL", "https://adposter-engine-production.up.railway.app"),
+    os.getenv("SHOPIFY_ACQUISITION_URL", "https://shopify-acquisition-engine-production.up.railway.app"),
+    os.getenv("ICOMEAUTO_URL", "https://icomeauto-saas-production.up.railway.app"),
+    os.getenv("STEUERCOCKPIT_URL", "https://steuercockpit-production-44c9.up.railway.app"),
+    os.getenv("DIGISTORE_URL", "https://digistore24-automation-production.up.railway.app"),
+    os.getenv("CREATORAI_URL", "https://creatorai-ultra-production.up.railway.app"),
+    os.getenv("COGNITIVE_URL", "https://cognitive-symphony-production.up.railway.app"),
 ]
 
 
