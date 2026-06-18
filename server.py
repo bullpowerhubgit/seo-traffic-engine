@@ -19,6 +19,76 @@ PORT = int(os.getenv("PORT", "8080"))
 DB_PATH = os.getenv("DB_PATH", "/tmp/seo_engine.db")
 APP_URL = os.getenv("APP_URL", "https://seo-traffic-engine-production.up.railway.app")
 
+# ── Mailchimp / Klaviyo / Shopify ─────────────────────────────────────────────
+MC_API_KEY      = os.getenv("MAILCHIMP_API_KEY", "")
+MC_SERVER       = os.getenv("MAILCHIMP_SERVER_PREFIX", "us7")
+MC_LIST_ID      = os.getenv("MAILCHIMP_LIST_ID", "")
+KV_API_KEY      = os.getenv("KLAVIYO_API_KEY", "")
+KV_LIST_ID      = os.getenv("KLAVIYO_LIST_ID", "")
+SHOPIFY_DOMAIN  = os.getenv("SHOPIFY_SHOP_DOMAIN", "")
+SHOPIFY_TOKEN   = os.getenv("SHOPIFY_ADMIN_API_TOKEN", "") or os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+SHOPIFY_API_VER = os.getenv("SHOPIFY_API_VERSION", "2024-10")
+
+
+async def mailchimp_add_subscriber(email: str, fname: str = "", tags: list = None):
+    if not MC_API_KEY or not MC_LIST_ID:
+        return
+    from base64 import b64encode
+    import hashlib
+    auth = b64encode(f"any:{MC_API_KEY}".encode()).decode()
+    member_hash = hashlib.md5(email.lower().encode()).hexdigest()
+    payload = {"email_address": email, "status_if_new": "subscribed",
+                "merge_fields": {"FNAME": fname}, "tags": tags or ["seo-engine", "content-reader"]}
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.put(
+                f"https://{MC_SERVER}.api.mailchimp.com/3.0/lists/{MC_LIST_ID}/members/{member_hash}",
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+                json=payload, timeout=aiohttp.ClientTimeout(total=10),
+            )
+    except Exception as e:
+        logger.warning(f"Mailchimp subscribe error: {e}")
+
+
+async def klaviyo_track_event(event_name: str, properties: dict):
+    if not KV_API_KEY:
+        return
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.post(
+                "https://a.klaviyo.com/api/events/",
+                headers={"Authorization": f"Klaviyo-API-Key {KV_API_KEY}",
+                         "revision": "2024-06-15", "Content-Type": "application/json"},
+                json={"data": {"type": "event", "attributes": {
+                    "metric": {"data": {"type": "metric", "attributes": {"name": event_name}}},
+                    "properties": properties,
+                    "time": datetime.now(timezone.utc).isoformat(),
+                }}},
+                timeout=aiohttp.ClientTimeout(total=10),
+            )
+    except Exception as e:
+        logger.warning(f"Klaviyo event error: {e}")
+
+
+async def shopify_update_product_seo(product_id: str, seo_title: str, seo_desc: str, tags: list):
+    if not SHOPIFY_DOMAIN or not SHOPIFY_TOKEN:
+        return
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.put(
+                f"https://{SHOPIFY_DOMAIN}/admin/api/{SHOPIFY_API_VER}/products/{product_id}.json",
+                headers={"X-Shopify-Access-Token": SHOPIFY_TOKEN, "Content-Type": "application/json"},
+                json={"product": {
+                    "id": product_id,
+                    "metafields_global_title_tag": seo_title[:70],
+                    "metafields_global_description_tag": seo_desc[:160],
+                    "tags": ", ".join(tags[:10]),
+                }},
+                timeout=aiohttp.ClientTimeout(total=15),
+            )
+    except Exception as e:
+        logger.warning(f"Shopify SEO update error: {e}")
+
 KEYWORDS = [
     "shopify automation", "shopify product import", "e-commerce automatisierung",
     "shopify ki tools", "dropshipping automatisierung", "shopify api python",
@@ -38,6 +108,12 @@ PRODUCTS = [
     {"name": "Shopify Acquisition Engine", "url": "https://shopify-acquisition-engine-production.up.railway.app", "desc": "KI-gestützte Shopify Automatisierung"},
     {"name": "SEO Turbo Tools", "url": "https://seo-turbo-tools-production.up.railway.app", "desc": "Professionelle SEO Analyse & Keyword Research"},
     {"name": "iComeAuto SaaS", "url": "https://icomeauto-saas-production.up.railway.app", "desc": "Income Automation Platform"},
+    {"name": "SteuercockPit", "url": "https://bullpower-steuercockpit.netlify.app", "desc": "KI-Steuerberater für Freelancer & Selbstständige"},
+    {"name": "Analytics Marketing Pro", "url": "https://analytics-marketing-pro-production.up.railway.app", "desc": "Klaviyo, Mailchimp & Facebook Pixel Automatisierung"},
+    {"name": "Shopify Automaton Suite", "url": "https://shopify-automaton-suite-production-e405.up.railway.app", "desc": "Vollautomatische Shopify Suite mit Amazon & AliExpress"},
+    {"name": "Windsurf Shopify Suite", "url": "https://windsurf-shopify-suite-production.up.railway.app", "desc": "Shopify SaaS mit KI-Preisoptimierung"},
+    {"name": "CreatorAI Ultra", "url": "https://creatorai-ultra-production.up.railway.app", "desc": "KI Content Creator & Automatisierung"},
+    {"name": "Cognitive Symphony", "url": "https://cognitive-symphony-production.up.railway.app", "desc": "KI Business Analyse & Automatisierung"},
 ]
 
 
@@ -282,6 +358,10 @@ SOCIAL_ENGINE_URLS = [
     os.getenv("COGNITIVE_URL", "https://cognitive-symphony-production.up.railway.app"),
     os.getenv("SUPERMEGABOT_URL", "https://dudirudibot-mega-production.up.railway.app"),
     os.getenv("TELEGRAM_BOT_URL", "https://telegram-automation-bot-production.up.railway.app"),
+    os.getenv("SEO_TURBO_URL", "https://seo-turbo-tools-production.up.railway.app"),
+    os.getenv("ANALYTICS_URL", "https://analytics-marketing-pro-production.up.railway.app"),
+    os.getenv("SHOPIFY_AUTOMATON_URL", "https://shopify-automaton-suite-production-e405.up.railway.app"),
+    os.getenv("WINDSURF_SHOPIFY_URL", "https://windsurf-shopify-suite-production.up.railway.app"),
 ]
 
 
@@ -353,13 +433,17 @@ async def task_generate_articles():
             article_url = f"{APP_URL}/blog/{slug}"
             await ping_search_engines(article_url)
             await broadcast_article(article, slug, keyword, product)
+            await klaviyo_track_event("SEO Article Published", {
+                "keyword": keyword, "title": title, "url": article_url,
+                "product": product["name"],
+            })
             await telegram_send(
                 f"📝 <b>Neuer SEO Artikel veröffentlicht!</b>\n\n"
                 f"🔑 Keyword: {keyword}\n"
                 f"📄 Titel: {title}\n"
                 f"🔗 URL: {article_url}\n"
                 f"🏪 Produkt: {product['name']}\n\n"
-                f"✅ Google & Bing gecrawlt"
+                f"✅ Google & Bing gecrawlt | Klaviyo getrackt"
             )
             logger.info(f"Artikel gespeichert: {slug}")
         except Exception as e:
@@ -407,6 +491,41 @@ async def task_add_keywords():
         logger.error(f"Keyword-Generierung fehlgeschlagen: {e}")
 
 
+async def task_shopify_seo_sync():
+    """Fetch Shopify products and update their SEO tags with current keywords."""
+    if not SHOPIFY_DOMAIN or not SHOPIFY_TOKEN:
+        logger.info("Shopify SEO sync: not configured")
+        return
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"https://{SHOPIFY_DOMAIN}/admin/api/{SHOPIFY_API_VER}/products.json?limit=10&fields=id,title,tags",
+                headers={"X-Shopify-Access-Token": SHOPIFY_TOKEN},
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as r:
+                data = await r.json(content_type=None)
+        products = data.get("products", [])
+        updated = 0
+        for p in products[:5]:
+            title = p.get("title", "")
+            if not title:
+                continue
+            seo_keywords = [kw for kw in KEYWORDS[:3] if any(w in title.lower() for w in ["shop", "seo", "auto", "store"])]
+            if not seo_keywords:
+                seo_keywords = KEYWORDS[:2]
+            await shopify_update_product_seo(
+                str(p["id"]),
+                f"{title} — Shopify Automatisierung & SEO",
+                f"Entdecke {title}. {seo_keywords[0].title()} für deinen Online-Shop. Jetzt starten!",
+                seo_keywords[:5],
+            )
+            updated += 1
+        logger.info(f"Shopify SEO sync: {updated} Produkte aktualisiert")
+        await klaviyo_track_event("Shopify SEO Synced", {"products_updated": updated})
+    except Exception as e:
+        logger.error(f"Shopify SEO sync error: {e}")
+
+
 async def get_task_due(task: str, interval: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT last_run FROM scheduler_state WHERE task = ?", (task,))
@@ -429,6 +548,7 @@ async def scheduler_loop():
         "tweet_articles": 4 * 3600,
         "add_keywords": 24 * 3600,
         "sitemap_ping": 1 * 3600,
+        "shopify_seo_sync": 12 * 3600,
     }
     await asyncio.sleep(10)
     logger.info("Scheduler gestartet")
@@ -453,6 +573,10 @@ async def scheduler_loop():
             if await get_task_due("sitemap_ping", INTERVALS["sitemap_ping"]):
                 logger.info("Task: sitemap_ping")
                 await ping_search_engines(APP_URL)
+
+            if await get_task_due("shopify_seo_sync", INTERVALS["shopify_seo_sync"]):
+                logger.info("Task: shopify_seo_sync")
+                await task_shopify_seo_sync()
 
         except Exception as e:
             logger.error(f"Scheduler error: {e}")
