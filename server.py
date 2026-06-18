@@ -27,6 +27,11 @@ KEYWORDS = [
     "affiliate marketing automatisierung", "digistore24 tipps",
     "passive income online shop", "shopify starter guide", "seo content strategie",
     "backlink aufbau strategie", "google ranking verbessern", "long tail keywords finden",
+    "amazon bestseller produkte finden", "ebay dropshipping deutschland",
+    "amazon fba anfänger guide", "ebay verkäufer automatisieren",
+    "amazon affiliate marketing", "ebay api integration",
+    "produkte von amazon importieren shopify", "ebay listing automatisierung",
+    "amazon product research tool", "best selling products ebay 2025",
 ]
 
 PRODUCTS = [
@@ -95,6 +100,49 @@ async def telegram_send(text: str):
         logger.error(f"Telegram send failed: {e}")
 
 
+async def search_amazon_products(keyword: str, limit: int = 5) -> list[dict]:
+    """Returns list of {title, url, price, image, asin} — affiliate links via tag if set"""
+    import urllib.parse
+    tag = os.getenv("AMAZON_AFFILIATE_TAG", "bullpower-21")
+    search_url = f"https://www.amazon.de/s?k={urllib.parse.quote(keyword)}&tag={tag}"
+    return [{"title": f"Amazon: {keyword}", "url": search_url, "price": "", "source": "amazon", "search": True}]
+
+
+async def search_ebay_products(keyword: str, limit: int = 5) -> list[dict]:
+    """eBay Finding API — needs EBAY_APP_ID, falls back to search URL"""
+    import urllib.parse
+    app_id = os.getenv("EBAY_APP_ID", "")
+    if app_id:
+        url = "https://svcs.ebay.com/services/search/FindingService/v1"
+        params = {
+            "OPERATION-NAME": "findItemsByKeywords",
+            "SERVICE-VERSION": "1.0.0",
+            "SECURITY-APPNAME": app_id,
+            "RESPONSE-DATA-FORMAT": "JSON",
+            "keywords": keyword,
+            "paginationInput.entriesPerPage": str(limit),
+            "sortOrder": "BestMatch",
+        }
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        items = data.get("findItemsByKeywordsResponse", [{}])[0].get("searchResult", [{}])[0].get("item", [])
+                        results = []
+                        for item in items[:limit]:
+                            title = item.get("title", [""])[0]
+                            item_url = item.get("viewItemURL", [""])[0]
+                            price = item.get("sellingStatus", [{}])[0].get("currentPrice", [{}])[0].get("__value__", "")
+                            results.append({"title": title, "url": item_url, "price": price, "source": "ebay"})
+                        return results
+        except Exception as e:
+            logger.warning(f"eBay API error: {e}")
+    # Fallback: search URL
+    search_url = f"https://www.ebay.de/sch/i.html?_nkw={urllib.parse.quote(keyword)}"
+    return [{"title": f"eBay: {keyword}", "url": search_url, "price": "", "source": "ebay", "search": True}]
+
+
 async def generate_article(keyword: str, product: dict) -> dict | None:
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -106,29 +154,59 @@ async def generate_article(keyword: str, product: dict) -> dict | None:
 
 Produkt das natürlich erwähnt wird: {product['name']} — {product['desc']} ({product['url']})
 
-Artikel-Struktur:
-1. Catchy Titel (H1) — enthält das Keyword
-2. Einleitung (2-3 Sätze, Hook)
-3. 3-4 Hauptabschnitte mit H2-Überschriften
-4. Praktische Tipps (Bullet Points)
-5. Abschluss mit natürlichem CTA zum Produkt
-6. Meta-Description (150 Zeichen)
+Ausgabe-Format (exakt so, keine JSON, nur Text):
+TITLE: [Catchy Titel mit Keyword, max 70 Zeichen]
+META: [Meta-Description 140-155 Zeichen]
+---
+[Artikel-Inhalt in HTML: <h2>, <p>, <ul><li> Tags, 600-900 Wörter, natürlich, hilfreich]
+[Am Ende CTA zum Produkt einbauen]
 
-Format: JSON mit Feldern: title, meta_description, content (HTML mit h2/p/ul Tags)
-Länge: 800-1200 Wörter. Natürlich, hilfreich, kein Spam."""
+Starte direkt ohne Einleitung wie "Hier ist der Artikel..."."""
 
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            max_tokens=3000,
             messages=[{"role": "user", "content": prompt}]
         )
         raw = msg.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        data = json.loads(raw)
-        return data
+
+        # Parse structured plain-text format
+        title = f"Guide: {keyword}"
+        meta = f"Alles über {keyword} — Tipps und Tools für 2025."
+        content = raw
+
+        if raw.startswith("TITLE:"):
+            lines = raw.split("\n")
+            body_lines = []
+            in_body = False
+            for line in lines:
+                if line.startswith("TITLE:") and not in_body:
+                    title = line.replace("TITLE:", "").strip()
+                elif line.startswith("META:") and not in_body:
+                    meta = line.replace("META:", "").strip()
+                elif line.strip() == "---":
+                    in_body = True
+                elif in_body:
+                    body_lines.append(line)
+            if body_lines:
+                content = "\n".join(body_lines).strip()
+
+        article = {"title": title, "meta_description": meta, "content": content}
+
+        # Append marketplace product recommendations
+        amazon_products = await search_amazon_products(keyword, limit=3)
+        ebay_products = await search_ebay_products(keyword, limit=3)
+
+        product_html = "\n<section class='marketplace-picks'>\n<h2>🛒 Passende Produkte</h2>\n"
+        product_html += "<div class='product-grid'>\n"
+        for p in amazon_products[:2]:
+            product_html += f'<div class="product-card"><a href="{p["url"]}" target="_blank" rel="nofollow">🟠 Amazon: {p["title"][:60]}</a></div>\n'
+        for p in ebay_products[:2]:
+            product_html += f'<div class="product-card"><a href="{p["url"]}" target="_blank" rel="nofollow">🟡 eBay: {p["title"][:60]}</a></div>\n'
+        product_html += "</div></section>\n"
+
+        article["content"] = article.get("content", "") + product_html
+        return article
     except Exception as e:
         logger.error(f"Artikel-Generierung fehlgeschlagen: {e}")
         return None
@@ -190,6 +268,33 @@ async def post_to_twitter(title: str, url: str, keyword: str) -> bool:
         return False
 
 
+SOCIAL_ENGINE_URLS = [
+    os.getenv("META_ENGINE_URL", "https://meta-social-engine-production.up.railway.app"),
+    os.getenv("VISUAL_ENGINE_URL", "https://visual-content-engine-production.up.railway.app"),
+    os.getenv("SOCIAL_ENGINE_URL", "https://social-traffic-engine-production.up.railway.app"),
+    os.getenv("FREELANCE_ENGINE_URL", "https://freelance-gig-engine-production.up.railway.app"),
+]
+
+
+async def broadcast_article(article: dict, slug: str, keyword: str, product: dict):
+    payload = {
+        "title": article.get("title", ""),
+        "content": article.get("content", "")[:2000],
+        "url": f"{APP_URL}/blog/{slug}",
+        "keyword": keyword,
+        "excerpt": article.get("meta_description", article.get("content", "")[:300]),
+        "product_name": product["name"],
+        "product_url": product["url"],
+    }
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+        for engine_url in SOCIAL_ENGINE_URLS:
+            try:
+                resp = await session.post(f"{engine_url}/api/ingest", json=payload)
+                logger.info(f"Broadcast to {engine_url}: {resp.status}")
+            except Exception as e:
+                logger.warning(f"Broadcast failed to {engine_url}: {e}")
+
+
 async def ping_search_engines(article_url: str):
     sitemap_url = f"{APP_URL}/sitemap.xml"
     ping_urls = [
@@ -238,6 +343,7 @@ async def task_generate_articles():
 
             article_url = f"{APP_URL}/blog/{slug}"
             await ping_search_engines(article_url)
+            await broadcast_article(article, slug, keyword, product)
             await telegram_send(
                 f"📝 <b>Neuer SEO Artikel veröffentlicht!</b>\n\n"
                 f"🔑 Keyword: {keyword}\n"
@@ -494,6 +600,26 @@ async def handle_trigger_tweets(request: web.Request) -> web.Response:
     return web.json_response({"status": "triggered", "task": "tweet_articles"})
 
 
+async def handle_products(request: web.Request) -> web.Response:
+    keyword = request.rel_url.query.get("keyword", "shopify automation")
+    source = request.rel_url.query.get("source", "all")
+    results = []
+    if source in ("amazon", "all"):
+        results += await search_amazon_products(keyword)
+    if source in ("ebay", "all"):
+        results += await search_ebay_products(keyword)
+    return web.json_response({"keyword": keyword, "products": results, "count": len(results)})
+
+
+async def handle_recommend(request: web.Request) -> web.Response:
+    data = await request.json()
+    topic = data.get("topic", "")
+    products_per_source = data.get("limit", 3)
+    amazon = await search_amazon_products(topic, products_per_source)
+    ebay = await search_ebay_products(topic, products_per_source)
+    return web.json_response({"topic": topic, "amazon": amazon, "ebay": ebay, "total": len(amazon) + len(ebay)})
+
+
 async def on_startup(app):
     await init_db()
     asyncio.create_task(scheduler_loop())
@@ -511,6 +637,8 @@ def create_app():
     app.router.add_get("/", serve_blog_index)
     app.router.add_post("/api/trigger/articles", handle_trigger_articles)
     app.router.add_post("/api/trigger/tweets", handle_trigger_tweets)
+    app.router.add_get("/api/products", handle_products)
+    app.router.add_post("/api/recommend", handle_recommend)
     return app
 
 
