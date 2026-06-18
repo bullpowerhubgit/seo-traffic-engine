@@ -576,16 +576,9 @@ async def serve_sitemap(request: web.Request) -> web.Response:
 
 
 async def handle_health(request: web.Request) -> web.Response:
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM articles")
-        count = (await cursor.fetchone())[0]
-        cursor = await db.execute("SELECT COUNT(*) FROM keyword_queue")
-        keywords = (await cursor.fetchone())[0]
     return web.json_response({
         "status": "ok",
         "service": "seo-traffic-engine",
-        "articles": count,
-        "keywords_queued": keywords,
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
 
