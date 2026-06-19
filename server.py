@@ -1479,7 +1479,7 @@ async def handle_trigger_articles(request: web.Request) -> web.Response:
     return web.json_response({"status": "triggered", "task": "turbo_generate_articles"})
 
 
-async def handle_trigger_indexnow(request: web.Request) -> web.Response:
+async def handle_trigger_indexnow(request: web.Request) -> web.Response:  # TURBO v2.0
     asyncio.create_task(task_reindex_old_articles())
     return web.json_response({"status": "triggered", "task": "indexnow_reindex"})
 
